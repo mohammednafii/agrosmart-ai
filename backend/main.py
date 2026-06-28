@@ -63,10 +63,10 @@ logging.basicConfig(
 logger = logging.getLogger("agrosmart.api")
 
 # ── Runtime environment ────────────────────────────────────────────────────────
-# Set ENVIRONMENT=production on Render to serve precomputed JSON files.
-# Defaults to "development" (live U-Net inference).
+# Defaults to "production" (serve precomputed JSON, no TensorFlow).
+# Set ENVIRONMENT=development locally to run live U-Net inference.
 
-ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
 
 # ── File paths ─────────────────────────────────────────────────────────────────
 
