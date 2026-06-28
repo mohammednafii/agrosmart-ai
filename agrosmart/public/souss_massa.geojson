@@ -1,0 +1,96 @@
+{
+  "type": "FeatureCollection",
+  "name": "Souss-Massa Provinces",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "taroudant",
+        "name_fr": "Taroudant",
+        "region": "Souss-Massa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-8.80, 31.00], [-7.50, 30.70], [-7.50, 29.80], [-8.50, 29.70],
+          [-9.00, 30.00], [-9.30, 30.30], [-9.10, 30.70], [-8.80, 31.00]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "chtouka",
+        "name_fr": "Chtouka Aït Baha",
+        "region": "souss"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-9.50, 29.60], [-9.00, 29.55], [-8.80, 29.90], [-9.10, 30.30],
+          [-9.40, 30.25], [-9.60, 29.90], [-9.50, 29.60]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "tiznit",
+        "name_fr": "Tiznit",
+        "region": "Souss-Massa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-10.15, 29.50], [-9.30, 29.30], [-7.50, 29.50], [-7.50, 29.80],
+          [-8.80, 29.70], [-9.40, 29.55], [-9.70, 29.65], [-10.15, 29.50]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "agadir",
+        "name_fr": "Agadir Ida-Ou-Tanane",
+        "region": "Souss-Massa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-10.00, 30.50], [-9.40, 30.45], [-9.30, 30.30], [-9.55, 30.30],
+          [-9.80, 30.45], [-10.00, 30.50]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "inzegane",
+        "name_fr": "Inzegane Aït Melloul",
+        "region": "Souss-Massa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-9.55, 30.30], [-9.30, 30.30], [-9.25, 30.38], [-9.40, 30.45],
+          [-9.55, 30.30]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "souss",
+        "name_fr": "Souss-Massa (Global)",
+        "region": "Souss-Massa"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-10.15, 29.50], [-9.30, 29.30], [-7.50, 29.50], [-7.50, 30.70],
+          [-8.80, 31.00], [-10.00, 30.50], [-10.15, 29.50]
+        ]]
+      }
+    }
+  ]
+}

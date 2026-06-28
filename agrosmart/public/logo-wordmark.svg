@@ -1,0 +1,7 @@
+<svg width="172" height="32" viewBox="0 0 172 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="agrosmart">
+  <rect width="32" height="32" rx="8" fill="#00C896"></rect>
+  <path d="M16 25.5V14.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"></path>
+  <path d="M16 16.5C10.8 16.5 7.6 12.8 8.2 7.4C13.4 7.4 16.6 11.1 16 16.5Z" fill="#FFFFFF"></path>
+  <path d="M16.4 18.8C21 18.8 23.8 15.4 23.2 10.6C18.6 10.9 15.8 14 16.4 18.8Z" fill="#FFFFFF" fill-opacity="0.82"></path>
+  <text x="44" y="22" font-family="Inter, sans-serif" font-size="20" font-weight="600" letter-spacing="-0.5" fill="#0E1A16">agrosmart</text>
+</svg>
