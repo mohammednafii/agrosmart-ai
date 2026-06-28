@@ -76,3 +76,8 @@ Python-3.10.20.tar.xz
 
 # ── Internal design system tooling ───────────────────────────────────────────
 .design-system/
+
+# ── Precomputed predictions (committed intentionally via git add -f or after generation) ──
+# The .gitkeep is tracked; the actual .json files must be added explicitly after
+# running scripts/precompute_predictions.py so they are not accidentally ignored.
+# Remove this comment block once you have committed the generated files.

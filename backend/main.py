@@ -31,8 +31,10 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
@@ -60,11 +62,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agrosmart.api")
 
+# ── Runtime environment ────────────────────────────────────────────────────────
+# Set ENVIRONMENT=production on Render to serve precomputed JSON files.
+# Defaults to "development" (live U-Net inference).
+
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+
 # ── File paths ─────────────────────────────────────────────────────────────────
 
-BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR: str   = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH: str = os.path.join(BASE_DIR, "models", "model_unet_souss_massa.keras")
-DATA_DIR: str = os.path.join(BASE_DIR, "data")
+DATA_DIR: str   = os.path.join(BASE_DIR, "data")
+PRED_DIR: str   = os.path.join(BASE_DIR, "static", "predictions")
 
 # ── Colour table for the 4 water-stress classes ────────────────────────────────
 # Matches the ListedColormap used during training visualisation and the
@@ -98,12 +107,28 @@ _model = None   # populated in lifespan()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Load the Keras U-Net model once at startup.
+    Startup / shutdown handler.
 
-    Uses a try/except import ladder so the code works whether the environment
-    provides TensorFlow 2.x (tf.keras) or standalone Keras 3.x.
+    Production mode  → skip TensorFlow entirely; serve precomputed JSON files.
+    Development mode → load the Keras U-Net model once, release on shutdown.
     """
     global _model
+
+    logger.info("[STARTUP] ENVIRONMENT=%s", ENVIRONMENT)
+
+    # ── Production: no model load ──────────────────────────────────────────────
+    if ENVIRONMENT == "production":
+        logger.info(
+            "[STARTUP] production mode — TensorFlow not imported; "
+            "precomputed predictions will be served from %s", PRED_DIR
+        )
+        Base.metadata.create_all(bind=engine)
+        logger.info("[STARTUP] database tables ensured")
+        yield
+        return          # nothing to clean up
+
+    # ── Development: load model ────────────────────────────────────────────────
+    logger.info("[STARTUP] development mode — loading U-Net model")
 
     if not os.path.isfile(MODEL_PATH):
         raise RuntimeError(
@@ -137,11 +162,11 @@ async def lifespan(app: FastAPI):
 
     # Create DB tables (no-op if they already exist)
     Base.metadata.create_all(bind=engine)
-    logger.info("Database tables ensured.")
+    logger.info("[STARTUP] database tables ensured")
 
     yield   # ←── server is running
 
-    logger.info("Shutdown: releasing model.")
+    logger.info("[SHUTDOWN] releasing model")
     _model = None
 
 
@@ -274,38 +299,67 @@ def _render_transparent_png(pred_map: np.ndarray) -> str:
 
 @app.post("/predict")
 async def predict(
-    region: str = Query(..., description="Province key, e.g. 'taroudant'"),
-    date: str = Query(
-        ..., description="Month in YYYY-MM format, e.g. '2024-07'"
-    ),
+    region: str = Query(..., description="Province key, e.g. 'souss_massa'"),
+    date: str = Query(..., description="Month in YYYY-MM format, e.g. '2024-01'"),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Run U-Net inference for a given region/date pair and return a transparent
-    PNG overlay geo-referenced to the input raster's bounding box.
+    Return a U-Net hydric-stress prediction for the given region/date.
 
-    The GeoTIFF for a given region and date must be pre-placed at:
-        backend/data/{region}_{date}.tif
+    Production mode  → loads backend/static/predictions/{region}_{date}.json
+    Development mode → runs live TensorFlow inference against the GeoTIFF
 
-    Returns
-    -------
-    JSON payload:
-    ::
+    Response (identical in both modes):
         {
             "success": true,
-            "image": "<base64 PNG string>",
-            "bounds": [[south, west], [north, east]],   // Leaflet format
-            "region": "taroudant",
-            "date": "2024-07",
-            "class_distribution": {
-                "0": 0.1234,   // fraction of valid pixels
-                "1": 0.3456,
-                "2": 0.3456,
-                "3": 0.1234
-            }
+            "image":   "<base64 RGBA PNG>",
+            "bounds":  [[south, west], [north, east]],
+            "region":  "souss_massa",
+            "date":    "2024-01",
+            "class_distribution": {"0": 0.12, "1": 0.34, "2": 0.34, "3": 0.20}
         }
     """
+    t0 = time.perf_counter()
+
+    # ── Input validation (always runs regardless of mode) ──────────────────────
+    if not region.replace("-", "").replace("_", "").isalpha():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid region identifier: '{region}'.",
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # PRODUCTION MODE — serve precomputed JSON (no TensorFlow, no GeoTIFF I/O)
+    # ══════════════════════════════════════════════════════════════════════════
+    if ENVIRONMENT == "production":
+        pred_path = os.path.join(PRED_DIR, f"{region}_{date}.json")
+
+        logger.info("[PREDICT] production mode: loading precomputed prediction")
+        logger.info("[PREDICT] file path used: %s", pred_path)
+
+        if not os.path.isfile(pred_path):
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No precomputed prediction for region='{region}', date='{date}'. "
+                    f"Run scripts/precompute_predictions.py locally first, then "
+                    f"commit static/predictions/{region}_{date}.json."
+                ),
+            )
+
+        with open(pred_path, "r", encoding="utf-8") as f:
+            payload: Dict[str, Any] = json.load(f)
+
+        elapsed = time.perf_counter() - t0
+        logger.info("[PREDICT] total response time: %.3f s", elapsed)
+        return payload
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # DEVELOPMENT MODE — live U-Net inference
+    # ══════════════════════════════════════════════════════════════════════════
     global _model
+
+    logger.info("[PREDICT] development mode: running live model")
 
     if _model is None:
         raise HTTPException(
@@ -313,16 +367,10 @@ async def predict(
             detail="Model not loaded. Server may still be starting up.",
         )
 
-    # ── 1. Validate and resolve input file ─────────────────────────────────────
-    if not region.replace("-", "").replace("_", "").isalpha():
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid region identifier: '{region}'.",
-        )
-
     tif_filename = f"{region}_{date}.tif"
     tif_path = os.path.join(DATA_DIR, tif_filename)
 
+    logger.info("[PREDICT] file path used: %s", tif_path)
     logger.info("POST /predict — region=%s  date=%s  file=%s", region, date, tif_path)
 
     if not os.path.isfile(tif_path):
@@ -334,7 +382,7 @@ async def predict(
             ),
         )
 
-    # ── 2. Preprocess GeoTIFF ─────────────────────────────────────────────────
+    # ── 1. Preprocess GeoTIFF ─────────────────────────────────────────────────
     try:
         raster: ProcessedRaster = process_geotiff(tif_path)
     except (FileNotFoundError, ValueError) as exc:
@@ -351,21 +399,17 @@ async def predict(
         raster.original_width,
     )
 
-    # ── 3. Batch U-Net inference ──────────────────────────────────────────────
-    # patch_stack: (N_valid, 32, 32, 5)
-    # logits output: (N_valid, 32, 32, N_CLASSES)
+    # ── 2. Batch U-Net inference ──────────────────────────────────────────────
     try:
         logits: np.ndarray = _model.predict(
             raster.patch_stack,
-            batch_size=32,    # adjust to GPU VRAM; 32 is safe for 4 GB
+            batch_size=32,
             verbose=0,
         )
     except Exception as exc:
         logger.exception("model.predict() failed")
         raise HTTPException(status_code=500, detail=f"Inference error: {exc}") from exc
 
-    # Apply argmax across the class axis to obtain integer class indices (0–3)
-    # Output: (N_valid, 32, 32), dtype int64 → cast to int8 to save memory
     patch_classes: np.ndarray = np.argmax(logits, axis=-1).astype(np.int8)
 
     logger.info(
@@ -374,7 +418,7 @@ async def predict(
         np.unique(patch_classes).tolist(),
     )
 
-    # ── 4. Reconstruct full spatial prediction map ────────────────────────────
+    # ── 3. Reconstruct full spatial prediction map ────────────────────────────
     pred_map: np.ndarray = _reconstruct_prediction_map(patch_classes, raster)
 
     logger.info(
@@ -383,10 +427,9 @@ async def predict(
         np.unique(pred_map).tolist(),
     )
 
-    # ── 5. Compute per-class pixel distribution ───────────────────────────────
-    # Restrict statistics to the study area (exclude −1 = outside boundary)
+    # ── 4. Per-class pixel distribution ──────────────────────────────────────
     valid_pixels: np.ndarray = pred_map[pred_map >= 0]
-    n_valid_px = max(int(valid_pixels.size), 1)   # avoid division by zero
+    n_valid_px = max(int(valid_pixels.size), 1)
 
     class_distribution: Dict[str, float] = {
         str(cls_idx): round(float((valid_pixels == cls_idx).sum()) / n_valid_px, 6)
@@ -395,29 +438,27 @@ async def predict(
 
     logger.info("Class distribution: %s", class_distribution)
 
-    # ── 6. Render to transparent PNG and Base64-encode ─────────────────────────
+    # ── 5. Render transparent PNG → base64 ───────────────────────────────────
     try:
         b64_image: str = _render_transparent_png(pred_map)
     except Exception as exc:
         logger.exception("PNG rendering failed")
         raise HTTPException(status_code=500, detail=f"Rendering error: {exc}") from exc
 
-    logger.info(
-        "PNG rendered — base64 length: %d chars", len(b64_image)
-    )
+    logger.info("PNG rendered — base64 length: %d chars", len(b64_image))
 
-    # ── 7. Build Leaflet-compatible bounding box ──────────────────────────────
-    # Leaflet ImageOverlay bounds format: [[south, west], [north, east]]
+    # ── 6. Leaflet bounding box ───────────────────────────────────────────────
     south: float = raster.bounds.bottom
     north: float = raster.bounds.top
-    west: float = raster.bounds.left
-    east: float = raster.bounds.right
+    west:  float = raster.bounds.left
+    east:  float = raster.bounds.right
 
     leaflet_bounds: List[List[float]] = [[south, west], [north, east]]
 
+    elapsed = time.perf_counter() - t0
     logger.info(
-        "Returning prediction — bounds=%s | b64_len=%d",
-        leaflet_bounds, len(b64_image),
+        "[PREDICT] total response time: %.3f s | bounds=%s | b64_len=%d",
+        elapsed, leaflet_bounds, len(b64_image),
     )
 
     return {
