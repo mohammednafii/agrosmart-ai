@@ -15,8 +15,8 @@ Pillow>=10.0.0
 # ── Deep learning runtime — choose ONE of the following two blocks ─────────────
 
 # Option A: TensorFlow 2.x (includes tf.keras)
-#   pip install tensorflow>=2.13.0
-tensorflow>=2.13.0
+#   pip install tensorflow==2.13.0
+tensorflow==2.13.0
 
 # Option B: Standalone Keras 3.x + TensorFlow backend
 #   Uncomment lines below and comment out the tensorflow line above
