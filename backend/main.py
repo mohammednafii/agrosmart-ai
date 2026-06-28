@@ -23,7 +23,8 @@ POST /predict?region=<str>&date=<YYYY-MM>
 
 CORS
 ----
-Allows all requests from http://localhost:3000 (Next.js dev server).
+Origins are read from the CORS_ALLOWED_ORIGINS environment variable
+(comma-separated list).  Defaults to http://localhost:3000 for local dev.
 """
 
 from __future__ import annotations
@@ -156,9 +157,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Read comma-separated origins from env; fall back to localhost for local dev.
+# Production example: CORS_ALLOWED_ORIGINS=https://agrosmart-ai.vercel.app
+_raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+_cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
