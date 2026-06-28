@@ -157,10 +157,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Read comma-separated origins from env; fall back to localhost for local dev.
-# Production example: CORS_ALLOWED_ORIGINS=https://agrosmart-ai.vercel.app
-_raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+# Read comma-separated allowed origins from the CORS_ALLOWED_ORIGINS env var.
+# Set this on Render to: http://localhost:3000,https://agrosmart-ai-4fmz.vercel.app
+_raw_origins = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,https://agrosmart-ai-4fmz.vercel.app",
+)
 _cors_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+logger.info("CORS allowed origins: %s", _cors_origins)
 
 app.add_middleware(
     CORSMiddleware,
